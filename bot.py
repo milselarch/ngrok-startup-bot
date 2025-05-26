@@ -2,9 +2,46 @@ import json
 import requests
 import subprocess
 
+import telegram
 from telegram import Update
-from telegram.ext import Updater, CommandHandler, CallbackContext
+from telegram.ext import (
+    Updater, CommandHandler, CallbackContext, ApplicationBuilder
+)
+from load_config import TELEGRAM_BOT_TOKEN
 
+
+class NgrokTelegramBot(object):
+    def __init__(self, config_path='config.yml'):
+        super().__init__()
+        self.config_path = config_path
+        self.bot = None
+        self.app = None
+
+    def start_bot(self):
+        self.bot = telegram.Bot(token=TELEGRAM_BOT_TOKEN)
+        self.app = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).build()
+
+        # on different commands - answer in Telegram
+        self.register_commands(self.app, commands_mapping=self.kwargify(
+            start=self.start_handler,
+            user_details=self.name_id_handler,
+            create_poll=self.create_poll,
+            view_poll=self.view_poll,
+            vote=self.vote_for_poll,
+            poll_results=self.fetch_poll_results,
+            has_voted=self.has_voted,
+            close_poll=self.close_poll,
+            view_votes=self.view_votes,
+            view_voters=self.view_poll_voters,
+            about=self.show_about,
+            help=self.show_help,
+
+            vote_admin=self.vote_for_poll_admin,
+            unclose_poll_admin=self.unclose_poll_admin,
+            close_poll_admin=self.close_poll_admin
+        ))
+
+        self.app.run_polling(allowed_updates=Update.ALL_TYPES)
 
 # Function to start ngrok and retrieve connection details
 def start_ngrok():
