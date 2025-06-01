@@ -1,12 +1,20 @@
 import json
 import requests
 import subprocess
-
 import telegram
+
 from telegram import Update
 from telegram.ext import (
-    Updater, CommandHandler, CallbackContext, ApplicationBuilder
+    Updater, CommandHandler, CallbackContext,
+    ApplicationBuilder, Application
 )
+from typing import Dict, Coroutine, Callable
+from telegram import (
+    Message, ReplyKeyboardMarkup, InlineKeyboardMarkup,
+    User as TeleUser, Update as BaseTeleUpdate, Bot as TelegramBot
+)
+
+from bot_middleware import track_errors
 from load_config import TELEGRAM_BOT_TOKEN
 
 
@@ -22,26 +30,58 @@ class NgrokTelegramBot(object):
         self.app = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).build()
 
         # on different commands - answer in Telegram
-        self.register_commands(self.app, commands_mapping=self.kwargify(
+        self.register_commands(self.app, commands_mapping=dict(
             start=self.start_handler,
-            user_details=self.name_id_handler,
-            create_poll=self.create_poll,
-            view_poll=self.view_poll,
-            vote=self.vote_for_poll,
-            poll_results=self.fetch_poll_results,
-            has_voted=self.has_voted,
-            close_poll=self.close_poll,
-            view_votes=self.view_votes,
-            view_voters=self.view_poll_voters,
-            about=self.show_about,
-            help=self.show_help,
-
-            vote_admin=self.vote_for_poll_admin,
-            unclose_poll_admin=self.unclose_poll_admin,
-            close_poll_admin=self.close_poll_admin
         ))
 
         self.app.run_polling(allowed_updates=Update.ALL_TYPES)
+
+    @staticmethod
+    async def start_handler(update: Update, _: CallbackContext) -> None:
+        await update.message.reply_text("Bot started.")
+
+    def register_commands(
+        self, dispatcher: Application,
+        commands_mapping: Dict[
+            str, Callable[[BaseTeleUpdate, ...], Coroutine]
+        ],
+    ):
+        for command_name in commands_mapping:
+            handler = commands_mapping[command_name]
+            wrapped_handler = self.wrap_command_handler(handler)
+            dispatcher.add_handler(CommandHandler(
+                command_name, wrapped_handler
+            ))
+
+    def wrap_command_handler(self, handler):
+        return track_errors(self.users_middleware(
+            handler, include_self=False
+        ))
+
+    def users_middleware(
+        self, func: Callable[..., Coroutine], include_self=True
+    ) -> Callable[[BaseTeleUpdate], Coroutine]:
+        """
+        Middleware that adds the user to the context of the callback
+        """
+        async def wrapper(
+            update: BaseTeleUpdate, *args, **kwargs
+        ):
+            user = update.effective_user
+            allowed = user.id in self.allowed_ids
+
+            if not allowed:
+                return update.message.reply_text(
+                    "You are not allowed to use this bot."
+                )
+
+            if include_self:
+                return func(self, update, *args, **kwargs)
+            else:
+                return await func(update, *args, **kwargs)
+
+        return wrapper
+
 
 # Function to start ngrok and retrieve connection details
 def start_ngrok():
