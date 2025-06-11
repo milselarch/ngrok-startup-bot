@@ -15,25 +15,30 @@ from telegram import (
 )
 
 from bot_middleware import track_errors
-from load_config import TELEGRAM_BOT_TOKEN
+from command import Command
+from load_config import load_config
 
 
 class NgrokTelegramBot(object):
     def __init__(self, config_path='config.yml'):
         super().__init__()
         self.config_path = config_path
+        config = load_config(config_path)
+        self.tele_config = config.telegram
+
         self.bot = None
         self.app = None
 
     def start_bot(self):
-        self.bot = telegram.Bot(token=TELEGRAM_BOT_TOKEN)
-        self.app = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).build()
+        self.bot = telegram.Bot(token=self.tele_config.bot_token)
+        self.app = ApplicationBuilder().token(self.tele_config.bot_token).build()
 
         # on different commands - answer in Telegram
-        self.register_commands(self.app, commands_mapping=dict(
-            start=self.start_handler,
-        ))
+        self.register_commands(self.app, commands_mapping={
+            Command.START: self.start_handler
+        })
 
+        print('<<< STARTING TELEGRAM BOT >>>')
         self.app.run_polling(allowed_updates=Update.ALL_TYPES)
 
     @staticmethod
@@ -68,7 +73,7 @@ class NgrokTelegramBot(object):
             update: BaseTeleUpdate, *args, **kwargs
         ):
             user = update.effective_user
-            allowed = user.id in self.allowed_ids
+            allowed = user.id in self.tele_config.allowed_chat_ids
 
             if not allowed:
                 return update.message.reply_text(
@@ -130,4 +135,5 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    ngrok_bot = NgrokTelegramBot(config_path='config.yml')
+    ngrok_bot.start_bot()

@@ -1,10 +1,18 @@
-import ast
-import yaml
+from typing import Optional
+from pydantic import BaseModel, Field
+from pydantic_yaml import parse_yaml_raw_as
 
-CONFIG_PATH = 'config.yml'
-with open(CONFIG_PATH, 'r') as config_file_obj:
-    YAML_CONFIG = yaml.safe_load(config_file_obj)
 
-# TODO: load using pydantic
-TELE_CONFIG = YAML_CONFIG['telegram']
-TELEGRAM_BOT_TOKEN: str = TELE_CONFIG['bot_token']
+class TelegramConfig(BaseModel):
+    bot_token: str
+    allowed_chat_ids: Optional[list[int]] = Field(default_factory=list)
+
+class Config(BaseModel):
+    telegram: TelegramConfig
+
+
+def load_config(config_path: str = 'config.yml') -> Config:
+    with open(config_path, 'r') as config_file_obj:
+        raw_data = config_file_obj.read()
+        yaml_config = parse_yaml_raw_as(Config, raw_data)
+        return yaml_config
