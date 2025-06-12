@@ -3,7 +3,7 @@ import requests
 import subprocess
 import telegram
 
-from telegram import Update
+from telegram import Update, Bot
 from telegram.ext import (
     Updater, CommandHandler, CallbackContext,
     ApplicationBuilder, Application
@@ -14,6 +14,7 @@ from telegram import (
     User as TeleUser, Update as BaseTeleUpdate, Bot as TelegramBot
 )
 
+from ngrok_manager import NgrokManager
 from bot_middleware import track_errors
 from command import Command
 from load_config import load_config
@@ -25,25 +26,79 @@ class NgrokTelegramBot(object):
         self.config_path = config_path
         config = load_config(config_path)
         self.tele_config = config.telegram
+        self.ngrok_manager = NgrokManager()
 
         self.bot = None
         self.app = None
 
     def start_bot(self):
         self.bot = telegram.Bot(token=self.tele_config.bot_token)
-        self.app = ApplicationBuilder().token(self.tele_config.bot_token).build()
+
+        builder = ApplicationBuilder()
+        builder.token(self.tele_config.bot_token)
+        builder.post_init(self.post_init)
+        self.app = builder.build()
 
         # on different commands - answer in Telegram
         self.register_commands(self.app, commands_mapping={
-            Command.START: self.start_handler
+            Command.START: self.start_handler,
+            Command.VIEW_TUNNELS: self.tunnel_details_handler,
         })
 
         print('<<< STARTING TELEGRAM BOT >>>')
         self.app.run_polling(allowed_updates=Update.ALL_TYPES)
 
+    async def post_init(self, _: Application):
+        await self.get_bot().set_my_commands([(
+            Command.START, 'start bot'
+        ), (
+            Command.VIEW_TUNNELS, 'view ngrok tunnels'
+        )])
+
+        self.ngrok_manager.start_tunnels_in_tmux()
+        connection_details_res = self.ngrok_manager.get_connection_details()
+
+        if not connection_details_res.is_ok():
+            err_msg = "Failed to get connection details from ngrok."
+            await self.broadcast(err_msg)
+            raise ValueError(err_msg)
+
+        connection_details = connection_details_res.unwrap()
+        after_start_message = (
+            "Ngrok tunnels started successfully.\n"
+            f"Connection details:\n{connection_details}"
+        )
+        await self.broadcast(after_start_message)
+
+    async def broadcast(self, message):
+        for chat_id in self.tele_config.allowed_chat_ids:
+            await self.bot.send_message(chat_id, message)
+
+    def get_bot(self) -> Bot:
+        assert self.bot is not None
+        return self.bot
+
     @staticmethod
     async def start_handler(update: Update, _: CallbackContext) -> None:
         await update.message.reply_text("Bot started.")
+
+    async def tunnel_details_handler(
+        self, update: Update, _: CallbackContext
+    ) -> None:
+        message = update.message
+        connection_details_res = self.ngrok_manager.get_connection_details()
+
+        if not connection_details_res.is_ok():
+            err_msg = "Failed to get connection details from ngrok."
+            await message.reply_text(err_msg)
+            raise ValueError(err_msg)
+
+        connection_details = connection_details_res.unwrap()
+        after_start_message = (
+            "Ngrok tunnels started successfully.\n"
+            f"Connection details:\n{connection_details}"
+        )
+        await message.reply_text(after_start_message)
 
     def register_commands(
         self, dispatcher: Application,
@@ -86,52 +141,6 @@ class NgrokTelegramBot(object):
                 return await func(update, *args, **kwargs)
 
         return wrapper
-
-
-# Function to start ngrok and retrieve connection details
-def start_ngrok():
-    # Start ngrok
-    subprocess.Popen(["ngrok", "start", "--all"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-
-    # Wait for ngrok to initialize
-    import time
-    time.sleep(5)
-
-    # Fetch connection details
-    response = requests.get("http://localhost:4040/api/tunnels")
-    tunnels = response.json().get("tunnels", [])
-    connection_details = "\n".join([f"{tunnel['name']}: {tunnel['public_url']}" for tunnel in tunnels])
-    return connection_details
-
-
-# Command handler for /start
-def start(update: Update, context: CallbackContext) -> None:
-    connection_details = start_ngrok()
-    update.message.reply_text(f"Ngrok started. Connection details:\n{connection_details}")
-
-
-# Command handler for /restart
-def restart(update: Update, context: CallbackContext) -> None:
-    # Kill existing ngrok process
-    subprocess.run(["pkill", "ngrok"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-
-    # Restart ngrok
-    connection_details = start_ngrok()
-    update.message.reply_text(f"Ngrok restarted. Connection details:\n{connection_details}")
-
-
-def main():
-    # Replace 'YOUR_BOT_TOKEN' with your actual bot token
-    updater = Updater("YOUR_BOT_TOKEN")
-    dispatcher = updater.dispatcher
-
-    # Add command handlers
-    dispatcher.add_handler(CommandHandler("start", start))
-    dispatcher.add_handler(CommandHandler("restart", restart))
-
-    # Start the bot
-    updater.start_polling()
-    updater.idle()
 
 
 if __name__ == "__main__":
