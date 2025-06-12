@@ -1,0 +1,13 @@
+[Unit]
+Description=Ngrok Telegram Bot
+After=network.target
+
+[Service]
+Type=simple
+User=milselarch
+WorkingDirectory=/home/milselarch/projects/ngrok_startup
+ExecStart=/home/milselarch/projects/ngrok_startup/venv/bin/python bot.py
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target

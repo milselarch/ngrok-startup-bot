@@ -1,3 +1,30 @@
-telegram bot to start and receive info about ngrok sessions
+Telegram bot to start and receive info about ngrok sessions
 
-uses python3.12
+This project uses python3.12  
+
+## Setup Instructions
+
+1. setup virtual environment
+   ```shell
+   $ python3.12 -m venv venv
+   $ source venv/bin/activate
+   ```
+2. Create a config.yml file at the project root (use config.example.yml as a template)
+3. Install dependencies and do database initialisation
+   ```shell
+   (venv) $ python -m pip install -r requirements.txt
+   ```
+4. Run the bot
+   ```shell
+   (venv) $ python bot.py
+   ```
+    
+To run it as a service, 
+create a service file at /etc/systemd/system/ngrok-bot.service
+(see `ngrok-tele-bot.service` for reference)  
+and activate it using: 
+
+1. `sudo systemctl daemon-reload`
+2. `sudo systemctl start ngrok-bot`
+3. `sudo systemctl enable ngrok-bot`
+
