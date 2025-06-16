@@ -7,6 +7,7 @@ class TelegramConfig(BaseModel):
     bot_token: str
     allowed_chat_ids: Optional[list[int]] = Field(default_factory=list)
 
+
 class Config(BaseModel):
     telegram: TelegramConfig
 
