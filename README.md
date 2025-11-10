@@ -1,4 +1,6 @@
-Telegram bot to start and receive info about ngrok connections
+Setup a service to automatically startup ngrok connections, and this 
+Telegram bot will tell you what the created ngrok connections are on startup + 
+let you read what ngrok connections you have via the `/view_tunnels` command.
 
 This project uses python3.12  
 
