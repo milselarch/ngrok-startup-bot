@@ -13,11 +13,13 @@ This project uses python3.12
    $ source venv/bin/activate
    ```
 3. Create a config.yml file at the project root (use config.example.yml as a template)
-4. Install dependencies and do database initialisation
+   - add in your own chat id with the bot to `allowed_chat_ids` setting to
+     whitelist access to the bot to yourself only
+5. Install dependencies and do database initialisation
    ```shell
    (venv) $ python -m pip install -r requirements.txt
    ```
-5. Run the bot
+6. Run the bot
    ```shell
    (venv) $ python bot.py
    ```
