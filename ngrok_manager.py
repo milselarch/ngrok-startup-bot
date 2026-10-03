@@ -1,12 +1,9 @@
 import subprocess
 import requests
-import json
 import time
-import signal
-import os
 
 from result import Ok, Err, Result
-from typing import List, Dict, Optional
+from typing import List, Dict
 from requests.exceptions import RequestException
 
 
@@ -22,18 +19,18 @@ class NgrokManager(object):
         self.session_name = session_name
         self.config_path = config_path
         self.process = None
-    
+
     @staticmethod
     def load_is_running() -> bool:
         try:
             response = requests.get(
-                "http://localhost:4040/api/tunnels", timeout=2
+                "http://localhost:4040/api/endpoints", timeout=2
             )
             return response.status_code == 200
         except requests.exceptions.RequestException:
             return False
 
-    def load_tunnels(self) -> Result[
+    def load_endpoints(self) -> Result[
         List[Dict], RequestException | NgrokNotRunningError
     ]:
         if not self.load_is_running():
@@ -41,14 +38,14 @@ class NgrokManager(object):
 
         try:
             response = requests.get(
-                "http://localhost:4040/api/tunnels"
+                "http://localhost:4040/api/endpoints"
             )
-            tunnels = response.json().get("tunnels", [])
-            return Ok(tunnels)
+            endpoints = response.json().get("endpoints", [])
+            return Ok(endpoints)
         except RequestException as e:
             return Err(e)
 
-    def start_tunnels_in_tmux(self) -> bool:
+    def start_endpoints_in_tmux(self) -> bool:
         if self.load_is_running():
             return True
 
@@ -85,9 +82,9 @@ class NgrokManager(object):
             print(f"Failed to start ngrok in tmux: {e}")
             return False
 
-    def start_tunnels(self, config_path: str = "") -> bool:
+    def start_endpoints(self, config_path: str = "") -> bool:
         """
-        Start all ngrok tunnels defined in config
+        Start all ngrok endpoints defined in config
         """
         if self.load_is_running():
             return True
@@ -109,8 +106,8 @@ class NgrokManager(object):
             print(f"Failed to start ngrok: {e}")
             return False
 
-    def stop_tunnels(self) -> bool:
-        """Stop all running ngrok tunnels"""
+    def stop_endpoints(self) -> bool:
+        """Stop all running ngrok endpoints"""
         try:
             if self.process:
                 self.process.terminate()
@@ -120,8 +117,8 @@ class NgrokManager(object):
                 # Try to kill any existing ngrok processes
                 subprocess.run(
                     ["pkill", "ngrok"],
-                   stdout=subprocess.DEVNULL,
-                   stderr=subprocess.DEVNULL
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL
                 )
 
             return not self.load_is_running()
@@ -129,31 +126,47 @@ class NgrokManager(object):
             print(f"Failed to stop ngrok: {e}")
             return False
 
-    def restart_tunnels(self, config_path: str = "") -> bool:
+    def restart_endpoints(self, config_path: str = "") -> bool:
         """
-        Restart all ngrok tunnels
+        Restart all ngrok endpoints
         """
-        self.stop_tunnels()
+        self.stop_endpoints()
         time.sleep(1)
-        return self.start_tunnels(config_path)
+        return self.start_endpoints(config_path)
 
-    def get_connection_details(self) -> Result[
-        str, NgrokNotRunningError | RequestException
-    ]:
+    def get_connection_details(
+        self,
+    ) -> Result[str, RequestException | NgrokNotRunningError]:
         """
-        Get formatted connection details for all tunnels
+        Return formatted details for active v3 endpoints.
         """
-        load_tunnels_res = self.load_tunnels()
-        if load_tunnels_res.is_err():
-            return load_tunnels_res
+        endpoints_result = self.load_endpoints()
 
-        tunnels = load_tunnels_res.unwrap()
+        if endpoints_result.is_err():
+            return Err(endpoints_result.unwrap_err())
+
+        endpoints = endpoints_result.unwrap()
         details = []
 
-        for tunnel in tunnels:
-            name = tunnel.get('name', 'unknown')
-            url = tunnel.get('public_url', 'unknown')
-            proto = tunnel.get('proto', 'unknown')
-            details.append(f"{name} ({proto}): {url}")
+        for endpoint in endpoints:
+            name = endpoint.get("name", "unknown")
+            url = (
+                endpoint.get("url")
+                or endpoint.get("public_url")
+                or endpoint.get("hostports")
+                or "unknown"
+            )
+
+            upstream = endpoint.get("upstream", {})
+            upstream_url = (
+                upstream.get("url")
+                if isinstance(upstream, dict)
+                else upstream
+            )
+
+            if upstream_url:
+                details.append(f"{name}: {url} -> {upstream_url}")
+            else:
+                details.append(f"{name}: {url}")
 
         return Ok("\n".join(details))

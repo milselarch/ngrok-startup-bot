@@ -55,7 +55,7 @@ class NgrokTelegramBot(object):
             Command.VIEW_TUNNELS, 'view ngrok tunnels'
         )])
 
-        self.ngrok_manager.start_tunnels_in_tmux()
+        self.ngrok_manager.start_endpoints_in_tmux()
         connection_details_res = self.ngrok_manager.get_connection_details()
 
         if not connection_details_res.is_ok():
