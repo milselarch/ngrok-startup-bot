@@ -2,12 +2,12 @@ Setup a service to automatically startup ngrok connections, and this
 Telegram bot will tell you what the created ngrok connections are on startup + 
 let you read what ngrok connections you have via the `/view_tunnels` command.
 
-This project uses python3.12  
+This project uses python3.12 and ngrok v3  
 
 ## Setup Instructions
 
 1. Install htop, and install and setup ngrok
-2. setup virtual environment
+2. Set up a virtual environment
    ```shell
    $ python3.12 -m venv venv
    $ source venv/bin/activate
@@ -15,11 +15,11 @@ This project uses python3.12
 3. Create a config.yml file at the project root (use config.example.yml as a template)
    - add in your own chat id with the bot to `allowed_chat_ids` setting to
      whitelist access to the bot to yourself only
-5. Install dependencies and do database initialisation
+4. Install dependencies and do database initialization
    ```shell
    (venv) $ python -m pip install -r requirements.txt
    ```
-6. Run the bot
+5. Run the bot
    ```shell
    (venv) $ python bot.py
    ```
@@ -32,4 +32,3 @@ and activate it using:
 1. `sudo systemctl daemon-reload`
 2. `sudo systemctl start ngrok-bot`
 3. `sudo systemctl enable ngrok-bot`
-
