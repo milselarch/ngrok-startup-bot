@@ -32,3 +32,14 @@ and activate it using:
 1. `sudo systemctl daemon-reload`
 2. `sudo systemctl start ngrok-bot`
 3. `sudo systemctl enable ngrok-bot`
+
+## TODO:
+- command to /start_endpoints
+- command to /stop_endpoints
+- make sure command to get tunnels checks if ngrok tmux is up
+- YAML ngrok config on whether to start (run?) on startup
+- pass in the name of ngrok_sessions
+
+## todos done
+- port to v3 ngrok API 
+- list existing tunnels

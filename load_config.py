@@ -5,7 +5,7 @@ from pydantic_yaml import parse_yaml_raw_as
 
 class TelegramConfig(BaseModel):
     bot_token: str
-    allowed_chat_ids: Optional[list[int]] = Field(default_factory=list)
+    allowed_chat_ids: list[int] = Field(default_factory=list)
 
 
 class Config(BaseModel):

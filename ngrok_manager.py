@@ -45,9 +45,16 @@ class NgrokManager(object):
         except RequestException as e:
             return Err(e)
 
-    def start_endpoints_in_tmux(self) -> bool:
+    def start_endpoints_in_tmux(self) -> Result[bool, None]:
+        """
+        Starts all ngrok endpoints in a new tmux session
+        :return:
+            Ok(True) - endpoint was already running
+            Ok(False) - endpoint was started successfully
+            Err(None) - failed to start endpoint
+        """
         if self.load_is_running():
-            return True
+            return Ok(True)
 
         ngrok_cmd = "ngrok start --all"
         if self.config_path:
@@ -77,10 +84,11 @@ class NgrokManager(object):
 
             # Wait for ngrok to initialize
             time.sleep(3)
-            return self.load_is_running()
+            self.load_is_running()
+            return Ok(False)
         except Exception as e:
             print(f"Failed to start ngrok in tmux: {e}")
-            return False
+            return Err(None)
 
     def start_endpoints(self, config_path: str = "") -> bool:
         """
@@ -110,10 +118,12 @@ class NgrokManager(object):
         """Stop all running ngrok endpoints"""
         try:
             if self.process:
+                was_process_running = True
                 self.process.terminate()
                 self.process.wait(timeout=5)
                 self.process = None
             else:
+                was_process_running = False
                 # Try to kill any existing ngrok processes
                 subprocess.run(
                     ["pkill", "ngrok"],
@@ -121,10 +131,12 @@ class NgrokManager(object):
                     stderr=subprocess.DEVNULL
                 )
 
-            return not self.load_is_running()
+            assert not self.load_is_running()
         except Exception as e:
             print(f"Failed to stop ngrok: {e}")
             return False
+
+        return was_process_running
 
     def restart_endpoints(self, config_path: str = "") -> bool:
         """

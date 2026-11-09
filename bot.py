@@ -1,17 +1,13 @@
-import json
-import requests
-import subprocess
 import telegram
 
 from telegram import Update, Bot
 from telegram.ext import (
-    Updater, CommandHandler, CallbackContext,
+    CommandHandler, CallbackContext,
     ApplicationBuilder, Application
 )
 from typing import Dict, Coroutine, Callable
 from telegram import (
-    Message, ReplyKeyboardMarkup, InlineKeyboardMarkup,
-    User as TeleUser, Update as BaseTeleUpdate, Bot as TelegramBot
+    Update as BaseTeleUpdate
 )
 
 from ngrok_manager import NgrokManager
@@ -42,7 +38,9 @@ class NgrokTelegramBot(object):
         # on different commands - answer in Telegram
         self.register_commands(self.app, commands_mapping={
             Command.START: self.start_handler,
-            Command.VIEW_TUNNELS: self.tunnel_details_handler,
+            Command.VIEW_ENDPOINTS: self.endpoint_details_handler,
+            Command.START_ENDPOINTS: self.start_endpoints_handler,
+            Command.STOP_ENDPOINTS: self.stop_endpoints_handler
         })
 
         print('<<< STARTING TELEGRAM BOT >>>')
@@ -52,7 +50,7 @@ class NgrokTelegramBot(object):
         await self.get_bot().set_my_commands([(
             Command.START, 'start bot'
         ), (
-            Command.VIEW_TUNNELS, 'view ngrok tunnels'
+            Command.VIEW_ENDPOINTS, 'view ngrok endpoints'
         )])
 
         self.ngrok_manager.start_endpoints_in_tmux()
@@ -65,7 +63,7 @@ class NgrokTelegramBot(object):
 
         connection_details = connection_details_res.unwrap()
         after_start_message = (
-            "Ngrok tunnels started successfully.\n"
+            "Ngrok endpoints started successfully.\n"
             f"Connection details:\n{connection_details}"
         )
         await self.broadcast(after_start_message)
@@ -80,11 +78,13 @@ class NgrokTelegramBot(object):
 
     @staticmethod
     async def start_handler(update: Update, _: CallbackContext) -> None:
+        assert update.message is not None
         await update.message.reply_text("Bot started.")
 
-    async def tunnel_details_handler(
+    async def endpoint_details_handler(
         self, update: Update, _: CallbackContext
     ) -> None:
+        assert update.message is not None
         message = update.message
         connection_details_res = self.ngrok_manager.get_connection_details()
 
@@ -95,10 +95,47 @@ class NgrokTelegramBot(object):
 
         connection_details = connection_details_res.unwrap()
         after_start_message = (
-            "Ngrok tunnels started successfully.\n"
+            "Ngrok endpoints started successfully.\n"
             f"Connection details:\n{connection_details}"
         )
         await message.reply_text(after_start_message)
+
+    async def stop_endpoints_handler(
+        self, update: Update, _: CallbackContext
+    ) -> None:
+        assert update.message is not None
+        message = update.message
+
+        process_was_running = self.ngrok_manager.stop_endpoints()
+        if process_was_running:
+            await message.reply_text(
+                "Ngrok endpoints stopped successfully."
+            )
+        else:
+            await message.reply_text(
+                "Ngrok endpoints were stopped already."
+            )
+
+    async def start_endpoints_handler(
+        self, update: Update, _: CallbackContext
+    ):
+        assert update.message is not None
+        message = update.message
+
+        start_res = self.ngrok_manager.start_endpoints_in_tmux()
+        if start_res.is_err():
+            return await message.reply_text(
+                "Failed to start ngrok endpoints."
+            )
+
+        if _is_newly_running := start_res.unwrap():
+            return await message.reply_text(
+                "Ngrok endpoints started successfully."
+            )
+        else:
+            return await message.reply_text(
+                "Ngrok endpoints were already running."
+            )
 
     def register_commands(
         self, dispatcher: Application,
@@ -128,10 +165,12 @@ class NgrokTelegramBot(object):
             update: BaseTeleUpdate, *args, **kwargs
         ):
             user = update.effective_user
+            assert user is not None
+            assert update.message is not None
             allowed = user.id in self.tele_config.allowed_chat_ids
 
             if not allowed:
-                return update.message.reply_text(
+                return await update.message.reply_text(
                     "You are not allowed to use this bot."
                 )
 
